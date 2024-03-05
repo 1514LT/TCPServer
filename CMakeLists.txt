@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.10)
+project(706)
+set(TOP_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+add_subdirectory(TCP)
+add_subdirectory(get_cpu_info)
+add_subdirectory(get_hdd_info)
+add_subdirectory(get_memory_info)
