@@ -2,6 +2,7 @@
 #define TCPSERVER_HPP
 #include "Base.hpp"
 #include "FTPServer.hpp"
+#include "Socket.hpp"
 #define SILENCE_FILE 819200
 #define POLLTIMEOUT 2500 * 1000
 #define NETTIMEOUT 100 * 1000 * 1000
@@ -23,19 +24,11 @@
 
 class JRLCServer : public Poco::Util::ServerApplication
 {
-  // typedef void (JRLCServer::*JRLCTimedTask)();
-  typedef void (JRLCServer::*JRLCTimedTask)(Poco::Net::StreamSocket*);
 private:
-  int sockfd;
-
-  std::vector<int> clients;
+  std::vector<Socket*> clients;
 
   Poco::FastMutex m_queueMutex;
 
-  // typedef Poco::Tuple<JRLCTimedTask,int,bool> TaskHandle;
-  typedef Poco::Tuple<JRLCTimedTask, int, bool, Poco::Net::StreamSocket*> TaskHandle;
-
-  std::multimap<Poco::Clock, TaskHandle> m_taskQueue;
 public:
   JRLCServer(int port);
 
@@ -50,26 +43,17 @@ public:
 
   memoryInfo* memory;
 
-  std::map<Poco::Net::StreamSocket*, JRLCTimedTask> socket_task_map;
+  Socket* client;
+
   
   std::string extractFileName(const std::string& absolutePath);
 
   std::string readFirstLineFromFile(const std::string &filename);
 
-  void handleMsg(Poco::UInt8 msgType, Poco::UInt32 bodySize, Poco::UInt32 serialNum, Poco::Net::StreamSocket *ss);
+  void handleMsg(Poco::UInt8 msgType, Poco::UInt32 bodySize, Poco::UInt32 serialNum, Poco::Net::StreamSocket *ss,Socket* client);
 
-  void handleBody(Poco::Net::StreamSocket *ss, Poco::UInt8 msgType);
+  void handleBody(Poco::Net::StreamSocket *ss, Poco::UInt8 msgType,Socket* client);
 
-  // void addTimedTask(JRLCTimedTask task, int interval, bool single);
-  void addTimedTask(JRLCTimedTask task, Poco::Net::StreamSocket* socket, int interval, bool single);
-
-  // void removeTimedTask(JRLCTimedTask task);
-  void removeTimedTask(JRLCTimedTask task, Poco::Net::StreamSocket* socket);
-
-  // void removeTimedTask(JRLCTimedTask task, int interval, bool single);
-  void removeTimedTask(JRLCTimedTask task, Poco::Net::StreamSocket* socket, int interval, bool single);
-
-  void clearTimedTask();
 
   std::string toJSONString(const Poco::JSON::Object &root);
 
@@ -78,33 +62,32 @@ public:
   void SendJson(Poco::Net::StreamSocket *ss,const Poco::JSON::Object obj,int Msg_Type);
 
 public:
-  void executeTasks();
 
   void ProcessBinaryLaunch();
 
-  void ProcessTimer(Poco::Net::StreamSocket *ss);
+  void ProcessTimer(Poco::Net::StreamSocket *ss,Socket* client);
 
-  void ProcessCpu(Poco::Net::StreamSocket *ss);
+  void ProcessCpu(Poco::Net::StreamSocket *ss,Socket* client);
 
-  void ProcessHdd(Poco::Net::StreamSocket *ss);
+  void ProcessHdd(Poco::Net::StreamSocket *ss,Socket* client);
 
-  void ProcessMem(Poco::Net::StreamSocket *ss);
+  void ProcessMem(Poco::Net::StreamSocket *ss,Socket* client);
 
-  void RemoveTimer(Poco::Net::StreamSocket* socket);
+  void RemoveTimer(Poco::Net::StreamSocket* socket,Socket* client);
 
-  void RemoveCpu(Poco::Net::StreamSocket* socket);
+  void RemoveCpu(Poco::Net::StreamSocket* socket,Socket* client);
 
-  void RemoveHdd(Poco::Net::StreamSocket* socket);
+  void RemoveHdd(Poco::Net::StreamSocket* socket,Socket* client);
 
-  void RemoveMem(Poco::Net::StreamSocket* socket);
+  void RemoveMem(Poco::Net::StreamSocket* socket,Socket* client);
 
-  void test(Poco::Net::StreamSocket* socket);
+  void test(Poco::Net::StreamSocket* socket,Socket* client);
 
-  void GetCpuInfo(Poco::Net::StreamSocket* socket);
+  void GetCpuInfo(Poco::Net::StreamSocket* socket,Socket* client);
 
-  void GetMemInfo(Poco::Net::StreamSocket* socket);
+  void GetMemInfo(Poco::Net::StreamSocket* socket,Socket* client);
 
-  void GetHddInfo(Poco::Net::StreamSocket* socket);
+  void GetHddInfo(Poco::Net::StreamSocket* socket,Socket* client);
   
 };
 #endif

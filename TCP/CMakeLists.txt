@@ -19,6 +19,7 @@ link_directories(Server PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PTHREAD_LIB})
 add_executable(Server TCPServer.cpp
                       FTPServer.cpp
                       Base.cpp
+                      Socket.cpp
                       ${CPU_SRC}/cpu-info.cpp
                       ${HDD_SRC}/hdd-info.cpp
                       ${MEMORY_SRC}/mem-info.cpp
