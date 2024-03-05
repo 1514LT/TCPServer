@@ -35,37 +35,40 @@ JRLCServer::JRLCServer(int port)
 }
 void JRLCServer::handleMsg(Poco::UInt8 msgType, Poco::UInt32 bodySize, Poco::UInt32 serialNum, Poco::Net::StreamSocket *ss)
 {
-  while (1)
+  try
   {
-    try
-    {
-      ss->receiveBytes(&bodySize, sizeof(bodySize));
-      ss->receiveBytes(&msgType, sizeof(msgType));
-      ss->receiveBytes(&serialNum, sizeof(serialNum));
-      bodySize = Poco::ByteOrder::fromLittleEndian(bodySize);
-      serialNum = Poco::ByteOrder::fromLittleEndian(serialNum);
-      printf("enter handleMessage msgType:%d\n", msgType);
-      handleBody(ss, msgType);
-    }
-    catch (Poco::Net::ConnectionResetException &)
+    if(ss->receiveBytes(&bodySize, sizeof(bodySize)) <= 0)
     {
       perror("client closed");
       ss->close();
       removeTimedTask(socket_task_map[ss],ss);
-      break;
+      return;
     }
-    catch (const Poco::Exception &e)
-    {
-      std::cerr << e.displayText() << '\n';
-    }
-    catch (const std::exception &e)
-    {
-      std::cerr << e.what() << '\n';
-    }
-    catch (...)
-    {
-      std::cerr << "unknow error!\n";
-    }
+    ss->receiveBytes(&msgType, sizeof(msgType));
+    ss->receiveBytes(&serialNum, sizeof(serialNum));
+    bodySize = Poco::ByteOrder::fromLittleEndian(bodySize);
+    serialNum = Poco::ByteOrder::fromLittleEndian(serialNum);
+    printf("enter handleMessage msgType:%d\n", msgType);
+    handleBody(ss, msgType);
+  }
+  catch (Poco::Net::ConnectionResetException &)
+  {
+    perror("client closed");
+    ss->close();
+    removeTimedTask(socket_task_map[ss],ss);
+    return;
+  }
+  catch (const Poco::Exception &e)
+  {
+    std::cerr << e.displayText() << '\n';
+  }
+  catch (const std::exception &e)
+  {
+    std::cerr << e.what() << '\n';
+  }
+  catch (...)
+  {
+    std::cerr << "unknow error!\n";
   }
 }
 void JRLCServer::handleBody(Poco::Net::StreamSocket *ss, Poco::UInt8 msgType)
