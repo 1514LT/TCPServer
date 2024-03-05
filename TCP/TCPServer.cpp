@@ -22,7 +22,6 @@ JRLCServer::JRLCServer(int port)
     {
       // 接受新的连接
       Poco::Net::StreamSocket *ss = new Poco::Net::StreamSocket(server.acceptConnection());
-      ss->impl()->sockfd();
       std::cout << "New connection from: " << ss->peerAddress().toString() << std::endl;
       std::thread handler(&JRLCServer::handleMsg, this, msgType, bodySize, serialNum, ss);
       handler.detach();
@@ -37,39 +36,50 @@ void JRLCServer::handleMsg(Poco::UInt8 msgType, Poco::UInt32 bodySize, Poco::UIn
 {
   try
   {
-    if(ss->receiveBytes(&bodySize, sizeof(bodySize)) <= 0)
+    while(1)
+    {
+
+      // if(ss->receiveBytes(&bodySize, sizeof(bodySize)) <= 0)
+      // {
+      //   perror("client closed");
+      //   ss->close();
+      //   removeTimedTask(socket_task_map[ss],ss);
+      //   // return;
+      //   break;
+      // }
+      int len;
+      len = ss->receiveBytes(&bodySize, sizeof(bodySize));
+      printf("len:%d\n",len);
+      ss->receiveBytes(&msgType, sizeof(msgType));
+      ss->receiveBytes(&serialNum, sizeof(serialNum));
+      bodySize = Poco::ByteOrder::fromLittleEndian(bodySize);
+      serialNum = Poco::ByteOrder::fromLittleEndian(serialNum);
+      printf("enter handleMessage msgType:%d\n", msgType);
+      handleBody(ss, msgType);
+    }
+        
+  }
+  catch (Poco::Net::ConnectionResetException &)
     {
       perror("client closed");
       ss->close();
       removeTimedTask(socket_task_map[ss],ss);
       return;
+      // break;
     }
-    ss->receiveBytes(&msgType, sizeof(msgType));
-    ss->receiveBytes(&serialNum, sizeof(serialNum));
-    bodySize = Poco::ByteOrder::fromLittleEndian(bodySize);
-    serialNum = Poco::ByteOrder::fromLittleEndian(serialNum);
-    printf("enter handleMessage msgType:%d\n", msgType);
-    handleBody(ss, msgType);
-  }
-  catch (Poco::Net::ConnectionResetException &)
-  {
-    perror("client closed");
-    ss->close();
-    removeTimedTask(socket_task_map[ss],ss);
-    return;
-  }
-  catch (const Poco::Exception &e)
-  {
-    std::cerr << e.displayText() << '\n';
-  }
-  catch (const std::exception &e)
-  {
-    std::cerr << e.what() << '\n';
-  }
-  catch (...)
-  {
-    std::cerr << "unknow error!\n";
-  }
+    catch (const Poco::Exception &e)
+    {
+      std::cerr << e.displayText() << '\n';
+    }
+    catch (const std::exception &e)
+    {
+      std::cerr << e.what() << '\n';
+    }
+    catch (...)
+    {
+      std::cerr << "unknow error!\n";
+    }
+  
 }
 void JRLCServer::handleBody(Poco::Net::StreamSocket *ss, Poco::UInt8 msgType)
 {
@@ -185,24 +195,35 @@ Poco::JSON::Object::Ptr JRLCServer::toJSONObj(const std::string &jsonString)
 
 void JRLCServer::SendJson(Poco::Net::StreamSocket *ss, const Poco::JSON::Object obj, int Msg_Type)
 {
-  Poco::UInt32 bodySize;
-  Poco::UInt8 msgType;
-  Poco::UInt32 serialNum;
-  Poco::UInt32 jsonSize;
-  Poco::UInt32 payloadsize;
   std::string result = toJSONString(obj);
-  printf("result:%s\n", result.c_str());
-  jsonSize = result.size();
-  payloadsize = 1;
-  serialNum = 1;
-  msgType = Msg_Type;
-  bodySize = 4 + 1 + 4 + 4 + 4 + jsonSize;
-  ss->sendBytes(&bodySize, 4);
-  ss->sendBytes(&msgType, 1);
-  ss->sendBytes(&serialNum, 4);
-  ss->sendBytes(&jsonSize, 4);
-  ss->sendBytes(&payloadsize, 4);
-  ss->sendBytes(result.c_str(), jsonSize);
+  int jsonSize = result.size();
+  char jsonData[jsonSize];
+  strcpy(jsonData,result.c_str());
+  printf("jsonData:%s\n", jsonData);
+  int cli_fd = ss->impl()->sockfd();
+  int payloadSize = 0;
+  int headLen = 4 + 1 + 4;
+  int bodyLen = 4 + 4 + jsonSize + payloadSize;
+  char *header = (char*)malloc(headLen + bodyLen);
+  char *p = header;
+  int *bodySize = (int*)p;
+  *bodySize = bodyLen;
+  p += 4;
+  char* msgType = (char*)p;
+  *msgType = Msg_Type;
+  p += 1;
+  int *serialNum = (int*)p;
+  *serialNum = 0;
+  p += 4;
+  int *jsonsize = (int*)p;
+  *jsonsize = jsonSize;
+  p += 4;
+  int *payloadsize = (int*)p;
+  *payloadsize = payloadSize;
+  p += 4;
+  memcpy(p,jsonData,jsonSize);
+  send(cli_fd,header,headLen + bodyLen,0);
+  free(header);
 }
 
 void JRLCServer::ProcessBinaryLaunch()
@@ -239,7 +260,7 @@ void JRLCServer::RemoveTimer(Poco::Net::StreamSocket* socket)
 void JRLCServer::ProcessCpu(Poco::Net::StreamSocket *ss)
 {
   socket_task_map[ss] = &JRLCServer::GetCpuInfo;
-  addTimedTask(&JRLCServer::GetCpuInfo, ss,1000, false);
+  addTimedTask(&JRLCServer::GetCpuInfo, ss,1000, true);
 }
 void JRLCServer::RemoveCpu(Poco::Net::StreamSocket* socket)
 {
@@ -314,44 +335,56 @@ void JRLCServer::clearTimedTask()
 void JRLCServer::GetCpuInfo(Poco::Net::StreamSocket* socket)
 {
   // 获取 CPU 信息
-  std::cout << "CPU 型号: " << cpu->getCPUModel() << std::endl;
-  std::cout << "CPU 架构: " << cpu->getCPUArchitecture();
-  std::cout << "逻辑 CPU 个数: " << cpu->getLogicalCPUCores();
-  std::cout << "CPU核数: " << cpu->getPhysicalCPUCores() << std::endl;
-  std::cout << "CPU的使用率为: " << cpu->getCPUUsage(5) << "%" << std::endl;
+  // std::cout << "CPU 型号: " << cpu->getCPUModel() << std::endl;
+  // std::cout << "CPU 架构: " << cpu->getCPUArchitecture();
+  // std::cout << "逻辑 CPU 个数: " << cpu->getLogicalCPUCores();
+  // std::cout << "CPU核数: " << cpu->getPhysicalCPUCores() << std::endl;
+  // std::cout << "CPU的使用率为: " << cpu->getCPUUsage(5) << "%" << std::endl;
   Poco::JSON::Object root;
   root.set("Msg_Type", "CPUInfo");
-  root.set("CPU_Model", cpu->getCPUModel());
-  root.set("CPU_Architecture", cpu->getCPUArchitecture());
-  root.set("CPU_Logical_Count", cpu->getLogicalCPUCores());
-  root.set("CPU_Count", cpu->getPhysicalCPUCores());
-  root.set("CPU_Usage", std::to_string(cpu->getCPUUsage(5)) + "%");
+  // root.set("CPU_Model", cpu->getCPUModel());
+  // root.set("CPU_Architecture", cpu->getCPUArchitecture());
+  // root.set("CPU_Logical_Count", cpu->getLogicalCPUCores());
+  // root.set("CPU_Count", cpu->getPhysicalCPUCores());
+  // root.set("CPU_Usage", std::to_string(cpu->getCPUUsage(5)) + "%");
   SendJson(socket,root,REPLAYCPU);
 }
 
 void JRLCServer::GetMemInfo(Poco::Net::StreamSocket* socket)
 {
-  unsigned long long totalRAM = memory->getTotalRAM();
-  unsigned long long freeRAM = memory->getFreeRAM();
-  unsigned long long usedRAM = memory->getUsedRAM();
+  // unsigned long long totalRAM = memory->getTotalRAM();
+  // unsigned long long freeRAM = memory->getFreeRAM();
+  // unsigned long long usedRAM = memory->getUsedRAM();
 
   // 打印内存信息
-  std::cout << "总内存大小: " << totalRAM << " 字节\n";
-  std::cout << "可用内存大小: " << freeRAM << " 字节\n";
-  std::cout << "已使用内存大小: " << usedRAM << " 字节\n";
+  // std::cout << "总内存大小: " << totalRAM << " 字节\n";
+  // std::cout << "可用内存大小: " << freeRAM << " 字节\n";
+  // std::cout << "已使用内存大小: " << usedRAM << " 字节\n";
+  Poco::JSON::Object root;
+  root.set("Msg_Type", "MemInfo");
+  root.set("totalRAM","totalRAM");
+  root.set("freeRAM","freeRAM");
+  root.set("usedRAM","usedRAM");
+  SendJson(socket,root,REPLAYMEM);
 }
 
 void JRLCServer::GetHddInfo(Poco::Net::StreamSocket* socket)
 {
   // 获取硬盘信息
-  unsigned long long totalDiskSpace = disk->getTotalDiskSpace();
-  unsigned long long freeDiskSpace = disk->getFreeDiskSpace();
-  unsigned long long usedDiskSpace = disk->getUsedDiskSpace();
+  // unsigned long long totalDiskSpace = disk->getTotalDiskSpace();
+  // unsigned long long freeDiskSpace = disk->getFreeDiskSpace();
+  // unsigned long long usedDiskSpace = disk->getUsedDiskSpace();
 
   // 打印硬盘信息
-  std::cout << "总磁盘空间大小: " << totalDiskSpace << " 字节\n";
-  std::cout << "可用磁盘空间大小: " << freeDiskSpace << " 字节\n";
-  std::cout << "已使用磁盘空间大小: " << usedDiskSpace << " 字节\n";
+  // std::cout << "总磁盘空间大小: " << totalDiskSpace << " 字节\n";
+  // std::cout << "可用磁盘空间大小: " << freeDiskSpace << " 字节\n";
+  // std::cout << "已使用磁盘空间大小: " << usedDiskSpace << " 字节\n";
+  Poco::JSON::Object root;
+  root.set("totalDiskSpace","totalDiskSpace");
+  root.set("freeDiskSpace","freeDiskSpace");
+  root.set("usedDiskSpace","usedDiskSpace");
+  SendJson(socket,root,REPLAYHDD);
+
 }
 
 std::string JRLCServer::readFirstLineFromFile(const std::string &filename)
