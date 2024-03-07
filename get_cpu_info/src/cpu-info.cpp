@@ -122,7 +122,7 @@ float cpuInfo::cal_cpuoccupy(CPU_OCCUPY *o, CPU_OCCUPY *n)
 }
 
 /*获取cpu使用率*/
-float cpuInfo::getCPUUsage (int time)
+float cpuInfo::getCPUSUsage (int time)
 {
     CPU_OCCUPY cpu_stat1;    
     CPU_OCCUPY cpu_stat2;
@@ -132,4 +132,67 @@ float cpuInfo::getCPUUsage (int time)
     get_cpuoccupy((CPU_OCCUPY *)&cpu_stat2);  
     cpu = cal_cpuoccupy((CPU_OCCUPY *)&cpu_stat1, (CPU_OCCUPY *)&cpu_stat2);
     return cpu;
+}
+
+
+
+// 获取具体某个CPU的时间
+CpuTime cpuInfo::getCpuTime(int cpuId) {
+    std::ifstream procStat("/proc/stat");
+    std::string line;
+    CpuTime cpuTime{};
+
+    for (int i = 0; i <= cpuId + 1; ++i) {  
+        std::getline(procStat, line);
+    }
+    
+    std::sscanf(line.c_str(), "cpu%*d %ld %ld %ld %ld %ld %ld %ld %ld %ld %ld", &cpuTime.user, &cpuTime.nice, &cpuTime.system, &cpuTime.idle, &cpuTime.iowait, &cpuTime.irq, &cpuTime.softirq, &cpuTime.steal, &cpuTime.guest, &cpuTime.guest_nice);
+    return cpuTime;
+}
+
+// 获取CPU的使用率
+double cpuInfo::getCpuUsage(int cpuId) {
+    CpuTime cpuTime1 = getCpuTime(cpuId);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    CpuTime cpuTime2 = getCpuTime(cpuId);
+
+    long idle1 = cpuTime1.idle + cpuTime1.iowait;
+    long idle2 = cpuTime2.idle + cpuTime2.iowait;
+
+    long nonIdle1 = cpuTime1.user + cpuTime1.nice + cpuTime1.system + cpuTime1.irq + cpuTime1.softirq + cpuTime1.steal;
+    long nonIdle2 = cpuTime2.user + cpuTime2.nice + cpuTime2.system + cpuTime2.irq + cpuTime2.softirq + cpuTime2.steal;
+
+    long total1 = idle1 + nonIdle1;
+    long total2 = idle2 + nonIdle2;
+
+    return static_cast<double>(total2 - total1 - (idle2 - idle1)) / (total2 - total1);
+}
+
+// 获取CPU总时间
+CpuTime cpuInfo::getTotalCpuTime() {
+    std::ifstream procStat("/proc/stat");
+    std::string line;
+    std::getline(procStat, line);
+    CpuTime cpuTime{};
+    
+    std::sscanf(line.c_str(), "cpu %ld %ld %ld %ld %ld %ld %ld %ld %ld %ld", &cpuTime.user, &cpuTime.nice, &cpuTime.system, &cpuTime.idle, &cpuTime.iowait, &cpuTime.irq, &cpuTime.softirq, &cpuTime.steal, &cpuTime.guest, &cpuTime.guest_nice);
+    return cpuTime;
+}
+
+// 获取总CPU使用率
+double cpuInfo::getTotalCpuUsage() {
+    CpuTime cpuTime1 = getTotalCpuTime();
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    CpuTime cpuTime2 = getTotalCpuTime();
+
+    long idle1 = cpuTime1.idle + cpuTime1.iowait;
+    long idle2 = cpuTime2.idle + cpuTime2.iowait;
+
+    long nonIdle1 = cpuTime1.user + cpuTime1.nice + cpuTime1.system + cpuTime1.irq + cpuTime1.softirq + cpuTime1.steal;
+    long nonIdle2 = cpuTime2.user + cpuTime2.nice + cpuTime2.system + cpuTime2.irq + cpuTime2.softirq + cpuTime2.steal;
+
+    long total1 = idle1 + nonIdle1;
+    long total2 = idle2 + nonIdle2;
+
+    return static_cast<double>(total2 - total1 - (idle2 - idle1)) / (total2 - total1);
 }

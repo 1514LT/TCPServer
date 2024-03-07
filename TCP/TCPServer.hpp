@@ -21,12 +21,11 @@
 #define REPLAYCPU 50
 #define REPLAYHDD 52
 #define REPLAYMEM 54
-
 class JRLCServer : public Poco::Util::ServerApplication
 {
 private:
-  std::vector<Socket*> clients;
-
+  std::map<int,Socket*> map_clients;
+  std::map<int,Poco::Net::StreamSocket *> map_sockets;
   Poco::FastMutex m_queueMutex;
 
 public:
@@ -61,6 +60,8 @@ public:
 
   void SendJson(Poco::Net::StreamSocket *ss,const Poco::JSON::Object obj,int Msg_Type);
 
+  // void start(int port);
+
 public:
 
   void ProcessBinaryLaunch();
@@ -69,25 +70,13 @@ public:
 
   void ProcessCpu(Poco::Net::StreamSocket *ss,Socket* client);
 
-  void ProcessHdd(Poco::Net::StreamSocket *ss,Socket* client);
-
-  void ProcessMem(Poco::Net::StreamSocket *ss,Socket* client);
-
   void RemoveTimer(Poco::Net::StreamSocket* socket,Socket* client);
 
   void RemoveCpu(Poco::Net::StreamSocket* socket,Socket* client);
-
-  void RemoveHdd(Poco::Net::StreamSocket* socket,Socket* client);
-
-  void RemoveMem(Poco::Net::StreamSocket* socket,Socket* client);
 
   void test(Poco::Net::StreamSocket* socket,Socket* client);
 
   void GetCpuInfo(Poco::Net::StreamSocket* socket,Socket* client);
 
-  void GetMemInfo(Poco::Net::StreamSocket* socket,Socket* client);
-
-  void GetHddInfo(Poco::Net::StreamSocket* socket,Socket* client);
-  
 };
 #endif

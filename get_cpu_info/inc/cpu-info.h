@@ -5,7 +5,11 @@
 #include <sstream>
 #include <string>
 #include <vector>
-
+#include <chrono>
+#include <thread>
+struct CpuTime {
+    long user, nice, system, idle, iowait, irq, softirq, steal, guest, guest_nice;
+};
 typedef struct PACKED         //定义一个cpu occupy的结构体
 {
     char name[20];      //定义一个char类型的数组名name有20个元素
@@ -36,7 +40,12 @@ public:
     // 获取 CPU 使用率
     void get_cpuoccupy (CPU_OCCUPY *cpust);
     float cal_cpuoccupy(CPU_OCCUPY *o, CPU_OCCUPY *n); 
-    float getCPUUsage (int time);
+    float getCPUSUsage (int time);
+    CpuTime getCpuTime(int cpuId);
+    double getCpuUsage(int cpuId);
+    CpuTime getTotalCpuTime();
+    double getTotalCpuUsage();
+
 
 private:
     std::vector<unsigned long long> prevTotalCPUTime;
